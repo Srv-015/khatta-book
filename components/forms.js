@@ -24,9 +24,9 @@ function useSave() {
   const run = async (fn, msg) => {
     try {
       await fn();
-      await reload();
       close();
       notify(msg);
+      reload().catch(() => notify('Saved, but could not refresh the list. Pull to reload.'));
     } catch (e) {
       setErr(e.message);
     }
@@ -79,9 +79,9 @@ export function useActions() {
           message={`Delete ${t.tid} (${t.name}) and all its repayments? This cannot be undone.`}
           onYes={async () => {
             await api(`/api/transactions/${t._id}`, { method: 'DELETE' });
-            await reload();
             close();
             notify('Transaction deleted');
+            await reload();
           }}
         />
       ),
@@ -91,9 +91,9 @@ export function useActions() {
           message={`Delete repayment ${r.rid}? This cannot be undone.`}
           onYes={async () => {
             await api(`/api/repayments/${r._id}`, { method: 'DELETE' });
-            await reload();
             close();
             notify('Repayment deleted');
+            await reload();
           }}
         />
       ),
@@ -133,7 +133,7 @@ export function TxForm({ tx, name = '' }) {
     );
   };
   return (
-    <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+    <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <h3 className="col-span-full text-lg font-semibold">
         {tx ? `Edit ${tx.tid}` : 'New transaction'}
       </h3>
@@ -234,7 +234,7 @@ export function RepaymentForm({ tid, name }) {
     );
   };
   return (
-    <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+    <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <h3 className="col-span-full text-lg font-semibold">Record repayment</h3>
       <label className="block text-sm text-mu">
         Person
@@ -295,7 +295,7 @@ export function PersonForm({ name }) {
         e.preventDefault();
         run(() => api('/api/people', { method: 'PUT', body: f }), 'Saved');
       }}
-      className="grid gap-3"
+      className="grid grid-cols-1 gap-3"
     >
       <h3 className="text-lg font-semibold">{name ? 'Edit contact' : 'Add person'}</h3>
       <Field

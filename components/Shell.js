@@ -124,7 +124,7 @@ function Inner({ children }) {
 
       {/* phone: floating liquid-glass pill with four tabs */}
       <nav aria-label="Main" aria-hidden={navHidden} data-hidden={navHidden}
-        className={`glass fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-30 mx-auto max-w-md rounded-full p-1.5 will-change-[transform,opacity] transition-[transform,opacity] duration-[380ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none print:hidden md:hidden ${navHidden ? 'pointer-events-none translate-y-[calc(100%+3.5rem)] opacity-0' : 'opacity-100'}`}>
+        className={`glass fixed inset-x-4 bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] z-30 mx-auto max-w-md rounded-full p-1.5 transition-[transform,opacity] duration-[380ms] ease-[cubic-bezier(.32,.72,0,1)] motion-reduce:transition-none print:hidden md:hidden ${navHidden ? 'pointer-events-none translate-y-[calc(100%+3.5rem)] opacity-0' : 'opacity-100'}`}>
         <div className="relative grid grid-cols-4">
           <span aria-hidden="true"
             className={`glass-active absolute inset-y-0 left-0 w-1/4 rounded-full transition-[transform,opacity] duration-300 ease-[cubic-bezier(.34,1.3,.5,1)] motion-reduce:transition-none ${idx < 0 ? 'opacity-0' : 'opacity-100'}`}

@@ -52,7 +52,7 @@ export default function ExportPage() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <Panel title="Excel & CSV export">
         <p className="mb-3 text-sm text-mu">
           Excel has three sheets: Transaction Summary, Repayment History and People Summary.

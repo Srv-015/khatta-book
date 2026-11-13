@@ -15,7 +15,7 @@ const Tile = ({ label, value, tone = '' }) => (
 
 function Skeleton() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading entries">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading entries">
       {[0, 1, 2].map((i) => <div key={i} className="h-36 animate-pulse rounded-xl border border-bd bg-bg" />)}
     </div>
   );
@@ -132,7 +132,7 @@ export default function PersonReport() {
               <div className="py-6 text-center text-sm text-mu">No entries to show</div>
             ) : (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {list.slice(0, limit).map((e) => <FlipCard key={e.key} e={e} />)}
                 </div>
                 <div className="mt-3 text-center text-xs text-mu" aria-live="polite">

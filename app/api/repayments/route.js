@@ -7,10 +7,13 @@ export const POST = handle(async (req, _c, uid) => {
   const amount = round2(Number(b.amount));
   if (!(amount > 0)) throw new HttpError('Amount must be greater than 0');
   if (!isValidDate(b.date)) throw new HttpError('Repayment date is required');
-  const t = await Transaction.findOne({ userId: uid, tid: b.tid });
+  const [t, existing] = await Promise.all([
+    Transaction.findOne({ userId: uid, tid: b.tid }),
+    Repayment.find({ userId: uid, tid: b.tid }).lean(),
+  ]);
   if (!t) throw new HttpError('Choose a transaction');
   if (b.date < t.date) throw new HttpError('Repayment date cannot be before the transaction date');
-  const paid = round2((await Repayment.find({ userId: uid, tid: t.tid }).lean()).reduce((a, r) => a + r.amount, 0));
+  const paid = round2(existing.reduce((a, r) => a + r.amount, 0));
   const balance = round2(t.amount - paid);
   if (amount > balance) throw new HttpError(`More than the remaining balance (₹${balance})`);
   const r = await createWithSeq(Repayment, uid, 'R', 'rid', {

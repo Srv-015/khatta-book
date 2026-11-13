@@ -1,33 +1,27 @@
 # Khatta Book
 
-Personal udhar / credit tracker for recording money given to people and repayments received. Built with Next.js 14 (App Router), Tailwind CSS, MongoDB and ExcelJS, with a bcrypt-hashed account password and signed HTTP-only login cookie.
-Run it on your own PC with local MongoDB, or connect it to a MongoDB Atlas database.
+Personal udhar / credit tracker. Next.js 14 (App Router) + Tailwind + MongoDB + ExcelJS, with a real login (bcrypt + signed HTTP-only cookie).
+Everything runs on your own PC; your records live in your local MongoDB data folder.
 
 ## What you need
 1. **Node.js 20.6 or newer** – https://nodejs.org
-2. **MongoDB** – use MongoDB Community Server locally (https://www.mongodb.com/try/download/community) or create a database in MongoDB Atlas.
-   Prefer Docker for a local database? `docker run -d --name khatta-mongo -p 27017:27017 -v khatta-data:/data/db --restart unless-stopped mongo:7`
+2. **MongoDB Community Server** running locally – https://www.mongodb.com/try/download/community
+   (install it as a service, so it starts with your PC; it keeps its data files on your disk).
+   Prefer Docker? `docker run -d --name khatta-mongo -p 27017:27017 -v khatta-data:/data/db --restart unless-stopped mongo:7`
 
 ## Run it
 ```bash
 npm install
-```
-Create `.env.local` in the project root and set your MongoDB connection string and a private signing secret:
-```dotenv
-MONGODB_URI=mongodb://127.0.0.1:27017/khatta-book
-AUTH_SECRET=replace-with-a-long-random-secret
-```
-For Atlas, use your Atlas connection string for `MONGODB_URI`. Keep `.env.local` private and do not commit it.
-
-Start the app:
-```bash
+cp .env.example .env.local      # Windows: copy .env.example .env.local
+# edit .env.local: set AUTH_SECRET to a long random string
 npm run dev                     # http://localhost:3000
 ```
-On first run, the login page lets you create the account; only the first account can be created. For production, run `npm run build` once, then `npm start`.
+On first run, the login page asks you to create your account (only the first account can be created).
+For everyday use, `npm run build` once, then `npm start`.
 
 ## Backups (please use them)
 - In the app: **Export > Download backup (.json)**. This file can be restored in the same screen.
-- `npm run backup` writes a raw safety copy of the app's MongoDB collections to `./backups/`. Schedule it (Windows Task Scheduler / cron) and copy the folder to a USB drive or cloud storage.
+- `npm run backup` writes a raw safety copy of the whole database to `./backups/`. Schedule it (Windows Task Scheduler / cron) and copy the folder to a USB drive or cloud storage.
 - Excel / CSV exports can be re-imported from the same screen (existing IDs are skipped).
 
 ## Forgot your password?
@@ -35,7 +29,7 @@ On first run, the login page lets you create the account; only the first account
 
 ## Layout
 - `app/(app)/*` – pages (dashboard, transactions, people, repayments, reports, settings)
-- `app/api/*` – REST routes; data routes require login, while `/api/auth/*` handles sign-in and first-account setup
+- `app/api/*` – REST routes (all require login; middleware.js blocks everything else)
 - `lib/models.js` – MongoDB models · `lib/calc.js` – balances, statuses, countdown
 - `components/*` – shell, forms, shared UI
 
@@ -66,3 +60,6 @@ Cards with notes flip to show them. Cards without notes do not flip; a short "No
 
 ## Reports vs Export
 **Reports** shows only the Person report. **Export** (`/export`) has Excel & CSV export plus backup, restore and import. On phones both are in the gear menu (Settings, Reports, Export); on desktop they are separate sidebar entries.
+
+## Making the deployed app fast (Vercel + Atlas)
+Vercel runs functions in Washington, D.C. by default. If your Atlas cluster is in India or Singapore, every database call crosses the world, which feels like lag. Set the function region to the one closest to your Atlas cluster: Vercel > your project > Settings > Functions > Function Region (Mumbai `bom1`, Singapore `sin1`), then redeploy. Check your cluster's region on its Atlas card.

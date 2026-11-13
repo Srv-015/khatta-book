@@ -37,7 +37,7 @@ export default function Dashboard() {
         <Stat label="Total settled" value={tx.filter((t) => t.status === 'Settled').length} />
         <Stat label="Overdue payments" value={money(sum(over, 'balance'))} tone="text-er" />
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Panel title="Overdue payments">
           <TxList items={over} onOpen={o} empty="Nothing overdue" />
         </Panel>

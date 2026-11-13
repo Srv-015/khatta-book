@@ -29,12 +29,12 @@ export default function Settings() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <Panel title="Appearance">
         <button className="btn" onClick={toggle}>Switch to {dark ? 'light' : 'dark'} mode</button>
       </Panel>
       <Panel title="Account">
-        <form onSubmit={changePw} className="grid gap-2">
+        <form onSubmit={changePw} className="grid grid-cols-1 gap-2">
           <input className="input" type="password" placeholder="Current password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required />
           <input className="input" type="password" placeholder="New password (8+ characters)" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required />
           {err && <p className="text-sm text-er">{err}</p>}
