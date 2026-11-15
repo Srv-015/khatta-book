@@ -1,9 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useData } from './DataProvider';
 import { Badge, Empty, TxList } from './ui';
 import { api } from '@/lib/client';
-import { DURATIONS, countdown, dueRange, dueText, durationLabel, fmtDate, money, nowTime, todayStr } from '@/lib/calc';
+import { DURATIONS, countdown, dueRange, dueText, durationLabel, fmtDate, money, nowTime, round2, todayStr } from '@/lib/calc';
+import { allocateFifo, openLoans, outstandingOf, paymentRows } from '@/lib/payments';
+import { personNames } from '@/lib/report';
+
+const newRequestId = () =>
+  globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 
 const Field = ({ label, className = '', ...p }) => (
   <label className={`block text-sm text-mu ${className}`}>
@@ -21,26 +26,36 @@ const KV = ({ k, children }) => (
 function useSave() {
   const { reload, close, notify } = useData();
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const run = async (fn, msg) => {
+    if (busyRef.current) return; // a second tap while saving is ignored
+    busyRef.current = true;
+    setBusy(true);
+    setErr('');
     try {
-      await fn();
+      const out = await fn();
       close();
-      notify(msg);
+      notify(typeof msg === 'function' ? msg(out) : msg);
       reload().catch(() => notify('Saved, but could not refresh the list. Pull to reload.'));
     } catch (e) {
+      busyRef.current = false;
+      setBusy(false);
       setErr(e.message);
     }
   };
-  return [err, run];
+  return [err, run, busy];
 }
-const Footer = ({ err, close, label = 'Save' }) => (
+const Footer = ({ err, close, busy = false, label = 'Save' }) => (
   <div className="col-span-full">
     {err && <p className="mb-2 text-sm text-er">{err}</p>}
     <div className="flex justify-end gap-2">
       <button type="button" className="btn" onClick={close}>
         Cancel
       </button>
-      <button className="btn btn-p">{label}</button>
+      <button className="btn btn-p" disabled={busy}>
+        {busy ? 'Saving…' : label}
+      </button>
     </div>
   </div>
 );
@@ -71,7 +86,7 @@ export function Confirm({ message, label = 'Delete', onYes }) {
 }
 
 export function useActions() {
-  const { show, reload, close, notify } = useData();
+  const { show, reload, close, notify, rp } = useData();
   return {
     askDeleteTx: (t) =>
       show(
@@ -85,24 +100,31 @@ export function useActions() {
           }}
         />
       ),
-    askDeleteRp: (r) =>
+    askDeleteRp: (r) => {
+      const rows = paymentRows(rp, r);
+      const total = round2(rows.reduce((a, x) => a + x.amount, 0));
       show(
         <Confirm
-          message={`Delete repayment ${r.rid}? This cannot be undone.`}
+          message={
+            rows.length > 1
+              ? `Delete payment ${r.payId} (${money(total)} spread over ${rows.length} loans)? Each of those loans will owe its share again. This cannot be undone.`
+              : `Delete repayment ${r.rid}? This cannot be undone.`
+          }
           onYes={async () => {
             await api(`/api/repayments/${r._id}`, { method: 'DELETE' });
             close();
-            notify('Repayment deleted');
+            notify(rows.length > 1 ? 'Payment deleted' : 'Repayment deleted');
             await reload();
           }}
         />
-      ),
+      );
+    },
   };
 }
 
 export function TxForm({ tx, name = '' }) {
   const { people, close } = useData();
-  const [err, run] = useSave();
+  const [err, run, busy] = useSave();
   const [f, setF] = useState(
     tx
       ? { ...tx, dueCustom: tx.repayDuration === 'others' ? tx.dueMax || '' : '', dueNotes: tx.dueNotes || '' }
@@ -206,85 +228,132 @@ export function TxForm({ tx, name = '' }) {
         Notes (optional)
         <textarea className="input mt-1" rows={2} value={f.notes} onChange={set('notes')} />
       </label>
-      <Footer err={err} close={close} />
+      <Footer err={err} close={close} busy={busy} />
     </form>
   );
 }
 
 export function RepaymentForm({ tid, name }) {
   const { tx, people, close } = useData();
-  const [err, run] = useSave();
+  const [err, run, busy] = useSave();
+  const [bad, setBad] = useState('');
+  const [requestId] = useState(newRequestId); // one id per opened form: the same submit can never pay twice
+  const names = useMemo(() => personNames(tx, people), [tx, people]);
   const t0 = tx.find((t) => t.tid === tid);
-  const [person, setPerson] = useState(t0?.name || name || people[0]?.name || '');
-  const [f, setF] = useState({
-    tid: t0?.tid || '',
-    amount: '',
-    date: todayStr(),
-    time: nowTime(),
-    notes: '',
-  });
-  const open = tx.filter((t) => t.name === person && t.balance > 0);
-  const sel = open.find((t) => t.tid === f.tid) || open[0];
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const [person, setPerson] = useState(
+    t0?.name || name || names.find((n) => openLoans(tx, n).length > 0) || names[0] || ''
+  );
+  const [f, setF] = useState({ amount: '', date: todayStr(), time: nowTime(), notes: '' });
+  const loans = useMemo(() => openLoans(tx, person), [tx, person]);
+  const outstanding = outstandingOf(loans);
+  const amount = round2(Number(f.amount));
+  const plan = amount > 0 && amount <= outstanding ? allocateFifo(loans, amount) : null;
+  const set = (k) => (e) => {
+    setBad('');
+    setF({ ...f, [k]: e.target.value });
+  };
   const submit = (e) => {
     e.preventDefault();
+    if (!loans.length) return setBad('This person has nothing outstanding');
+    if (!(amount > 0)) return setBad('Enter an amount greater than 0');
+    if (amount > outstanding) return setBad(`More than the total outstanding balance (${money(outstanding)})`);
     run(
-      () => api('/api/repayments', { method: 'POST', body: { ...f, tid: sel?.tid } }),
-      'Repayment recorded'
+      () => api('/api/repayments', { method: 'POST', body: { person, ...f, requestId } }),
+      (res) => (res?.remaining != null ? `Repayment recorded · ${money(res.remaining)} still due` : 'Repayment recorded')
     );
   };
   return (
     <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <h3 className="col-span-full text-lg font-semibold">Record repayment</h3>
-      <label className="block text-sm text-mu">
+      <label className="col-span-full block text-sm text-mu">
         Person
-        <select className="input mt-1" value={person} onChange={(e) => setPerson(e.target.value)}>
-          {people.map((p) => (
-            <option key={p._id}>{p.name}</option>
+        <select
+          className="input mt-1"
+          value={person}
+          onChange={(e) => {
+            setBad('');
+            setPerson(e.target.value);
+          }}
+        >
+          {names.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
           ))}
         </select>
       </label>
-      <label className="block text-sm text-mu">
-        Related transaction
-        <select className="input mt-1" value={sel?.tid || ''} onChange={set('tid')}>
-          {open.length ? (
-            open.map((t) => (
-              <option key={t.tid} value={t.tid}>
-                {t.tid} · {t.reason || 'Loan'} · balance {money(t.balance)}
-              </option>
-            ))
-          ) : (
-            <option value="">No open transactions</option>
-          )}
-        </select>
-      </label>
+      <div className="col-span-full rounded-xl border border-bd bg-bg p-3">
+        <div className="text-xs text-mu">Total outstanding</div>
+        <div className="text-2xl font-semibold" data-testid="outstanding">
+          {money(outstanding)}
+        </div>
+        <div className="text-xs text-mu">
+          {loans.length
+            ? `Across ${loans.length} unpaid loan${loans.length > 1 ? 's' : ''} · paid oldest first`
+            : 'Nothing outstanding'}
+        </div>
+      </div>
       <Field
         label="Amount repaid (₹)"
         type="number"
         inputMode="decimal"
         min="0.01"
         step="0.01"
-        max={sel?.balance}
-        placeholder={sel ? `Balance ${money(sel.balance)}` : ''}
+        max={outstanding > 0 ? outstanding : undefined}
+        placeholder={loans.length ? `Up to ${money(outstanding)}` : ''}
         value={f.amount}
         onChange={set('amount')}
+        disabled={!loans.length}
         required
       />
-      <span className="hidden sm:block" />
+      <div className="flex items-end">
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={!loans.length}
+          onClick={() => {
+            setBad('');
+            setF({ ...f, amount: String(outstanding) });
+          }}
+        >
+          Pay full amount
+        </button>
+      </div>
+      {plan && (
+        <div className="col-span-full rounded-xl border border-bd p-3 text-sm" data-testid="plan">
+          <div className="mb-1 text-xs text-mu">This payment will be applied to</div>
+          {plan.allocations.map((a) => (
+            <div key={a.tid} className="flex justify-between gap-2">
+              <span className="truncate">
+                {a.tid}
+                {loans.find((l) => l.tid === a.tid)?.reason ? ` · ${loans.find((l) => l.tid === a.tid).reason}` : ''}
+              </span>
+              <span className="whitespace-nowrap">
+                {money(a.amount)}
+                {a.settles ? ' · settled' : ''}
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 flex justify-between gap-2 border-t border-bd pt-1 text-mu">
+            <span>Remaining after this payment</span>
+            <span className="whitespace-nowrap">{money(round2(outstanding - amount))}</span>
+          </div>
+        </div>
+      )}
       <Field label="Repayment date" type="date" value={f.date} onChange={set('date')} required />
       <Field label="Repayment time" type="time" value={f.time} onChange={set('time')} />
       <label className="col-span-full block text-sm text-mu">
         Notes (optional)
         <textarea className="input mt-1" rows={2} value={f.notes} onChange={set('notes')} />
       </label>
-      <Footer err={err} close={close} />
+      <Footer err={bad || err} close={close} busy={busy} />
     </form>
   );
 }
 
 export function PersonForm({ name }) {
   const { people, close } = useData();
-  const [err, run] = useSave();
+  const [err, run, busy] = useSave();
   const [f, setF] = useState({
     name: name || '',
     phone: people.find((p) => p.name === name)?.phone || '',
@@ -310,7 +379,7 @@ export function PersonForm({ name }) {
         value={f.phone}
         onChange={(e) => setF({ ...f, phone: e.target.value })}
       />
-      <Footer err={err} close={close} />
+      <Footer err={err} close={close} busy={busy} />
     </form>
   );
 }
@@ -366,7 +435,14 @@ export function TxDetail({ tid }) {
                 <td>
                   {fmtDate(r.date)} {r.time}
                 </td>
-                <td className="whitespace-normal">{r.notes}</td>
+                <td className="whitespace-normal">
+                  {r.notes}
+                  {paymentRows(rp, r).length > 1 && (
+                    <div className="text-xs text-mu">
+                      Part of payment {r.payId} ({money(round2(paymentRows(rp, r).reduce((a, x) => a + x.amount, 0)))} over {paymentRows(rp, r).length} loans)
+                    </div>
+                  )}
+                </td>
                 <td className="print:hidden">
                   <button className="btn btn-sm" onClick={() => askDeleteRp(r)}>
                     Delete

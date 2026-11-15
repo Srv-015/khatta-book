@@ -48,6 +48,9 @@ function FlipCard({ e }) {
           <div className={`mt-2 text-2xl font-semibold ${given ? '' : 'text-ok'}`}>{money(e.amount)}</div>
           <div className="mt-1 text-sm">{fmtDate(e.date)} · {fmtTime(e.time)}</div>
           {e.reason && <div className="mt-1 truncate text-xs text-mu">{e.reason}</div>}
+          {e.allocations?.length > 1 && (
+            <div className="mt-1 text-xs text-mu">{e.allocations.map((a) => `${a.tid} ${money(a.amount)}`).join(' · ')}</div>
+          )}
           {hasNotes && <div className="mt-3 text-xs text-mu">Tap to see notes</div>}
         </div>
 

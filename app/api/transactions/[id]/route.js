@@ -1,6 +1,8 @@
 import { handle, HttpError, cleanTx, ensurePerson } from '@/lib/api';
 import { round2 } from '@/lib/calc';
 import { Transaction, Repayment, Person } from '@/lib/models';
+import { removeLoan } from '@/lib/payments';
+import { paymentsDb } from '@/lib/paymentsDb';
 
 export const PUT = handle(async (req, { params }, uid) => {
   const t = await Transaction.findOne({ _id: params.id, userId: uid });
@@ -22,9 +24,4 @@ export const PUT = handle(async (req, { params }, uid) => {
   return { ok: true };
 });
 
-export const DELETE = handle(async (_req, { params }, uid) => {
-  const t = await Transaction.findOneAndDelete({ _id: params.id, userId: uid });
-  if (!t) throw new HttpError('Transaction not found', 404);
-  await Repayment.deleteMany({ userId: uid, tid: t.tid });
-  return { ok: true };
-});
+export const DELETE = handle(async (_req, { params }, uid) => removeLoan(paymentsDb, { uid, id: params.id }));

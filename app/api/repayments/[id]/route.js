@@ -1,8 +1,6 @@
-import { handle, HttpError } from '@/lib/api';
-import { Repayment } from '@/lib/models';
+import { handle } from '@/lib/api';
+import { removePayment } from '@/lib/payments';
+import { paymentsDb } from '@/lib/paymentsDb';
 
-export const DELETE = handle(async (_req, { params }, uid) => {
-  const r = await Repayment.findOneAndDelete({ _id: params.id, userId: uid });
-  if (!r) throw new HttpError('Repayment not found', 404);
-  return { ok: true };
-});
+// Deleting one row of a multi-loan payment removes the whole payment, atomically.
+export const DELETE = handle(async (_req, { params }, uid) => removePayment(paymentsDb, { uid, id: params.id }));

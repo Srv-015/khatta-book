@@ -8,8 +8,7 @@
     "start": "next start",
     "backup": "node --env-file=.env.local scripts/backup.mjs",
     "reset-password": "node --env-file=.env.local scripts/reset-password.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

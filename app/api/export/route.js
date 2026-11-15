@@ -2,9 +2,10 @@ import ExcelJS from 'exceljs';
 import { handle } from '@/lib/api';
 import { Transaction, Repayment } from '@/lib/models';
 import { durationLabel, enrich } from '@/lib/calc';
+import { paymentTotals } from '@/lib/payments';
 
 const TX = ['Transaction ID', 'Person’s Name', 'Amount Given', 'Total Amount Repaid', 'Outstanding Balance', 'Transaction Date', 'Transaction Time', 'Expected Repayment', 'Expected Repayment From', 'Expected Repayment To', 'Status', 'Description', 'Notes', 'Expected Repayment Notes'];
-const RP = ['Repayment ID', 'Transaction ID', 'Person’s Name', 'Amount Repaid', 'Repayment Date', 'Repayment Time', 'Notes'];
+const RP = ['Repayment ID', 'Transaction ID', 'Person’s Name', 'Amount Repaid', 'Repayment Date', 'Repayment Time', 'Notes', 'Payment ID', 'Payment Total'];
 const PP = ['Person’s Name', 'Total Money Given', 'Total Money Repaid', 'Outstanding Balance'];
 const LABEL = { Partial: 'Partially Paid', Settled: 'Fully Settled' };
 const asDate = (s) => (s ? new Date(s + 'T00:00:00Z') : null);
@@ -21,7 +22,8 @@ export const GET = handle(async (req, _c, uid) => {
   const tx = enrich(T, R).filter((t) => (!ids || ids.includes(t.tid)) && (!from || t.date >= from) && (!to || t.date <= to));
   const nm = Object.fromEntries(tx.map((t) => [t.tid, t.name]));
   const A = tx.map((t) => [t.tid, t.name, t.amount, t.paid, t.balance, t.date, t.time, durationLabel(t), t.dueMin, t.dueMax, LABEL[t.status] || t.status, t.reason, t.notes, t.dueNotes || '']);
-  const B = R.filter((r) => nm[r.tid]).map((r) => [r.rid, r.tid, nm[r.tid], r.amount, r.date, r.time, r.notes]);
+  const whole = paymentTotals(R); // full payments, even when only some of their loans are exported
+  const B = R.filter((r) => nm[r.tid]).map((r) => [r.rid, r.tid, nm[r.tid], r.amount, r.date, r.time, r.notes, r.payId || r.rid, whole.get(r.payId || r.rid).total]);
   const P = {};
   tx.forEach((t) => { const p = (P[t.name] ??= [t.name, 0, 0, 0]); p[1] += t.amount; p[2] += t.paid; p[3] += t.balance; });
   const stamp = new Date().toISOString().slice(0, 10);
@@ -48,7 +50,7 @@ export const GET = handle(async (req, _c, uid) => {
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: head.length } };
   };
   sheet('Transaction Summary', TX, A, { money: [2, 3, 4], dates: [5, 8, 9], w: [14, 22, 15, 18, 18, 16, 14, 18, 22, 22, 14, 32, 32, 32] });
-  sheet('Repayment History', RP, B, { money: [3], dates: [4], w: [14, 14, 22, 15, 16, 15, 32] });
+  sheet('Repayment History', RP, B, { money: [3], dates: [4], w: [14, 14, 22, 15, 16, 15, 32, 14, 15] });
   sheet('People Summary', PP, Object.values(P), { money: [1, 2, 3], w: [24, 18, 18, 18] });
   const buf = await wb.xlsx.writeBuffer();
   return new Response(buf, {

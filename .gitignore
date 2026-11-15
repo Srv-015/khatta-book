@@ -1,20 +1,44 @@
+
+# Dependencies
 node_modules/
+
+# Next.js
 .next/
-/out/
-/build/
+out/
+build/
+
+# Test coverage
 coverage/
 
-# Local environment files; keep the example template shareable.
+# Local environment files (never commit secrets)
 .env*
 !.env.example
 
+# Local database backups and exports
 backups/
+*.backup
+*.bak
+
+# Vercel
 .vercel/
 
-# Logs and OS files
+# Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# Operating system files
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo

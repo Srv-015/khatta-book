@@ -1,15 +1,18 @@
 'use client';
+import { useMemo } from 'react';
 import { useData } from '@/components/DataProvider';
-import { RepaymentForm, TxDetail, useActions } from '@/components/forms';
+import { PersonDetail, RepaymentForm, TxDetail, useActions } from '@/components/forms';
 import { Empty } from '@/components/ui';
 import { fmtDate, money } from '@/lib/calc';
+import { groupPayments } from '@/lib/payments';
 
 export default function Repayments() {
   const { tx, rp, loading, show } = useData();
   const { askDeleteRp } = useActions();
+  const rows = useMemo(() => groupPayments(rp, tx), [rp, tx]); // one line per payment
   if (loading) return <Empty>Loading…</Empty>;
-  const nm = Object.fromEntries(tx.map((t) => [t.tid, t.name]));
-  const rows = [...rp].sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || '')));
+  const applied = (g) => g.allocations.map((a) => `${a.tid} ${money(a.amount)}`).join(' · ');
+  const open = (g) => show(g.allocations.length > 1 ? <PersonDetail name={g.person} /> : <TxDetail tid={g.allocations[0].tid} />);
   return (
     <>
       <div className="mb-3">
@@ -19,23 +22,24 @@ export default function Repayments() {
       </div>
 
       <div className="space-y-2 md:hidden">
-        {rows.map((r) => (
-          <div key={r._id} className="card">
+        {rows.map((g) => (
+          <div key={g.key} className="card">
             <div className="flex justify-between gap-2">
               <div className="font-semibold">
-                {nm[r.tid]}
+                {g.person}
                 <div className="text-xs font-normal text-mu">
-                  {r.rid} · {r.tid} · {fmtDate(r.date)} {r.time}
+                  {g.id} · {fmtDate(g.date)} {g.time}
                 </div>
               </div>
-              <div className="font-semibold">{money(r.amount)}</div>
+              <div className="font-semibold">{money(g.amount)}</div>
             </div>
-            {r.notes && <div className="mt-1 text-sm text-mu">{r.notes}</div>}
+            <div className="mt-1 text-xs text-mu">{applied(g)}</div>
+            {g.notes && <div className="mt-1 text-sm text-mu">{g.notes}</div>}
             <div className="mt-2 flex gap-2">
-              <button className="btn btn-sm" onClick={() => show(<TxDetail tid={r.tid} />)}>
-                View loan
+              <button className="btn btn-sm" onClick={() => open(g)}>
+                {g.allocations.length > 1 ? 'View person' : 'View loan'}
               </button>
-              <button className="btn btn-sm" onClick={() => askDeleteRp(r)}>
+              <button className="btn btn-sm" onClick={() => askDeleteRp(g.rows[0])}>
                 Delete
               </button>
             </div>
@@ -49,7 +53,7 @@ export default function Repayments() {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Transaction</th>
+              <th>Applied to</th>
               <th>Person</th>
               <th>Amount</th>
               <th>Date</th>
@@ -59,21 +63,21 @@ export default function Repayments() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r._id}>
-                <td>{r.rid}</td>
+            {rows.map((g) => (
+              <tr key={g.key}>
+                <td>{g.id}</td>
                 <td>
-                  <button className="text-ac" onClick={() => show(<TxDetail tid={r.tid} />)}>
-                    {r.tid}
+                  <button className="text-ac" onClick={() => open(g)}>
+                    {g.allocations.length > 1 ? applied(g) : g.allocations[0].tid}
                   </button>
                 </td>
-                <td>{nm[r.tid]}</td>
-                <td>{money(r.amount)}</td>
-                <td>{fmtDate(r.date)}</td>
-                <td>{r.time}</td>
-                <td>{r.notes}</td>
+                <td>{g.person}</td>
+                <td>{money(g.amount)}</td>
+                <td>{fmtDate(g.date)}</td>
+                <td>{g.time}</td>
+                <td>{g.notes}</td>
                 <td>
-                  <button className="btn btn-sm" onClick={() => askDeleteRp(r)}>
+                  <button className="btn btn-sm" onClick={() => askDeleteRp(g.rows[0])}>
                     Delete
                   </button>
                 </td>
